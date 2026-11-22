@@ -1,0 +1,34 @@
+OG WORLD — PHASE 9: ADMIN PRODUCT URL IMPORTER
+
+WHAT CHANGED
+- Admin dashboard now has a PRODUCTS tab.
+- Paste a public supplier product URL and choose FETCH PRODUCT DETAILS.
+- The importer reads public Open Graph / Twitter metadata and schema.org Product JSON-LD.
+- Review and edit the fetched name, description, image, and supplier cost.
+- Set your selling price, MRP, category, payment options, and publish status.
+- Save products to the existing Supabase products table.
+- Edit existing products or hide them from the storefront (soft-disable; no permanent delete).
+- Existing Orders and Payments admin tabs remain.
+
+IMPORTANT: URL IMPORT LIMITATIONS
+This is a metadata importer, not a guaranteed scraper. The importer currently accepts Meesho, Flipkart, and Amazon product domains. Some pages block automated requests, require login/CAPTCHA, redirect, or do not expose product metadata. In those cases the admin will show an error and you can fill the product details manually. It does not bypass supplier restrictions. Check product details, image rights, stock, shipping, and supplier price before publishing.
+
+SETUP — REQUIRED ONCE
+1. Extract this ZIP into your project folder / open the extracted folder in VS Code.
+2. In Supabase Dashboard → SQL Editor, run the complete file:
+   supabase/phase9-admin-products.sql
+   This grants authenticated users permission to manage products only when public.is_admin() returns true. RLS remains enabled.
+3. Deploy the Edge Function from this project folder. Install Supabase CLI and sign in/link your existing project, then run:
+   supabase functions deploy import-product
+   Project ref is the part before .supabase.co in your Supabase URL.
+   The function uses the logged-in user's JWT when called from the website. Do not disable JWT verification.
+4. Install/build locally:
+   npm install
+   npm run build
+5. Push the updated project to GitHub and redeploy on Vercel. Keep the existing Vercel environment variables.
+
+SECURITY
+- The ZIP intentionally does not include .env.local. Keep your local .env.local private.
+- Never add the Supabase service_role / secret key to Vite, GitHub, or Vercel frontend variables.
+- Keep using the existing VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.
+- Only a profile with role='admin' can manage catalogue products.

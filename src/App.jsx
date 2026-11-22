@@ -251,23 +251,61 @@ function WishlistPanel({ products, wishlistIds, onToggle, onAdd, onClose }) {
 }
 
 function AdminPanel({ user, onClose }) {
-  const [tab,setTab]=useState('orders');
-  const [orders,setOrders]=useState([]),[items,setItems]=useState([]),[payments,setPayments]=useState([]);
+  const [tab,setTab]=useState('products');
+  const [orders,setOrders]=useState([]),[items,setItems]=useState([]),[payments,setPayments]=useState([]),[products,setProducts]=useState([]);
   const [busy,setBusy]=useState(false),[message,setMessage]=useState('');
+  const emptyProduct={name:'',description:'',category:'Fashion',source_name:'Other',source_url:'',source_cost:'',selling_price:'',mrp:'',image_url:'',prepaid_enabled:true,cod_enabled:false,is_active:true};
+  const [form,setForm]=useState(emptyProduct),[editingId,setEditingId]=useState(null),[fetching,setFetching]=useState(false);
   async function load(){
     setBusy(true);setMessage('');
-    const [o,p]=await Promise.all([
+    const [o,p,pr]=await Promise.all([
       supabase.from('orders').select('*').order('created_at',{ascending:false}).limit(100),
-      supabase.from('payment_submissions').select('*').order('created_at',{ascending:false}).limit(100)
+      supabase.from('payment_submissions').select('*').order('created_at',{ascending:false}).limit(100),
+      supabase.from('products').select('id,name,description,category,image_urls,source_name,source_url,source_cost,selling_price,mrp,is_active,prepaid_enabled,cod_enabled,created_at').order('created_at',{ascending:false}).limit(200)
     ]);
-    if(o.error||p.error){setMessage(o.error?.message||p.error?.message||'Could not load admin data.');setBusy(false);return;}
-    setOrders(o.data||[]);setPayments(p.data||[]);
+    if(o.error||p.error||pr.error){setMessage(o.error?.message||p.error?.message||pr.error?.message||'Could not load admin data.');setBusy(false);return;}
+    setOrders(o.data||[]);setPayments(p.data||[]);setProducts(pr.data||[]);
     const ids=(o.data||[]).map(x=>x.id);
     if(ids.length){const it=await supabase.from('order_items').select('*').in('order_id',ids);if(!it.error)setItems(it.data||[]);else setMessage(it.error.message);}
     else setItems([]);
     setBusy(false);
   }
   useEffect(()=>{load()},[]);
+  async function fetchProduct(){
+    if(!form.source_url.trim()){setMessage('Pehle product URL paste karo.');return;}
+    try{
+      new URL(form.source_url.trim());
+    }catch{setMessage('Valid product URL paste karo.');return;}
+    setFetching(true);setMessage('Product page se details fetch ho rahi hain…');
+    const {data,error}=await supabase.functions.invoke('import-product',{body:{url:form.source_url.trim()}});
+    setFetching(false);
+    if(error){setMessage('URL fetch nahi ho paya: '+error.message+'. Supplier page blocking/CORS ke karan kuch URLs import nahi hote. Details manually fill kar sakte ho.');return;}
+    if(!data||!data.name){setMessage(data?.error||'Is URL se product details nahi mili. Details manually fill karo.');return;}
+    setForm(f=>({...f,name:data.name||f.name,description:data.description||f.description,image_url:data.image_url||f.image_url,source_cost:data.source_cost??f.source_cost,source_name:data.source_name||f.source_name}));
+    setMessage('Details mil gayi. Selling price aur baaki fields check karke Save Product dabao.');
+  }
+  function editProduct(p){
+    setEditingId(p.id);
+    setForm({name:p.name||'',description:p.description||'',category:p.category||'Fashion',source_name:p.source_name||'Other',source_url:p.source_url||'',source_cost:p.source_cost??'',selling_price:p.selling_price??'',mrp:p.mrp??'',image_url:Array.isArray(p.image_urls)?(p.image_urls[0]||''):'',prepaid_enabled:p.prepaid_enabled!==false,cod_enabled:!!p.cod_enabled,is_active:p.is_active!==false});
+    setTab('products');setMessage('Product editing mode. Changes save karne ke liye Update Product dabao.');
+  }
+  async function saveProduct(e){
+    e.preventDefault();
+    if(!form.name.trim()||!form.category.trim()||form.selling_price===''||Number(form.selling_price)<0){setMessage('Product name, category aur valid selling price zaroori hain.');return;}
+    if(form.source_name&&!['Meesho','Flipkart','Other'].includes(form.source_name)){setMessage('Invalid supplier/source.');return;}
+    const payload={name:form.name.trim(),description:form.description.trim(),category:form.category.trim(),source_name:form.source_name,source_url:form.source_url.trim()||null,source_cost:form.source_cost===''?null:Number(form.source_cost),selling_price:Number(form.selling_price),mrp:form.mrp===''?null:Number(form.mrp),image_urls:form.image_url.trim()?[form.image_url.trim()]:[],prepaid_enabled:!!form.prepaid_enabled,cod_enabled:!!form.cod_enabled,is_active:!!form.is_active};
+    setBusy(true);setMessage('');
+    const result=editingId?await supabase.from('products').update(payload).eq('id',editingId):await supabase.from('products').insert(payload);
+    setBusy(false);
+    if(result.error){setMessage('Save failed: '+result.error.message);return;}
+    setMessage(editingId?'Product updated successfully.':'Product added successfully.');
+    setForm(emptyProduct);setEditingId(null);await load();
+  }
+  async function deactivateProduct(p){
+    if(!window.confirm(`"${p.name}" ko storefront se hide karna hai?`))return;
+    setBusy(true);const {error}=await supabase.from('products').update({is_active:false}).eq('id',p.id);setBusy(false);
+    if(error)setMessage(error.message);else setMessage('Product storefront se hide ho gaya.');await load();
+  }
   async function verify(payment, approved){
     const promptText=approved?'Confirm that this UPI payment is visible in your bank/UPI account?':'Reject this payment submission?';
     if(!window.confirm(promptText))return;
@@ -286,8 +324,30 @@ function AdminPanel({ user, onClose }) {
   function orderItems(orderId){return items.filter(x=>x.order_id===orderId)}
   return <div className="admin-backdrop"><section className="admin-panel">
     <header className="admin-header"><div><span className="eyebrow">OG WORLD · CONTROL ROOM</span><h2>Admin dashboard</h2><p>Signed in as {user.email}</p></div><div className="admin-head-actions"><button className="filter-chip" onClick={load}>REFRESH</button><button className="icon-btn" onClick={onClose} aria-label="Close admin">×</button></div></header>
-    <div className="admin-tabs"><button className={tab==='orders'?'active':''} onClick={()=>setTab('orders')}>ORDERS ({orders.length})</button><button className={tab==='payments'?'active':''} onClick={()=>setTab('payments')}>PAYMENTS ({payments.filter(p=>p.status==='submitted').length} pending)</button></div>
+    <div className="admin-tabs"><button className={tab==='products'?'active':''} onClick={()=>setTab('products')}>PRODUCTS ({products.length})</button><button className={tab==='orders'?'active':''} onClick={()=>setTab('orders')}>ORDERS ({orders.length})</button><button className={tab==='payments'?'active':''} onClick={()=>setTab('payments')}>PAYMENTS ({payments.filter(p=>p.status==='submitted').length} pending)</button></div>
     {message&&<p className="admin-message">{message}</p>}{busy&&<p className="admin-muted">Loading / updating…</p>}
+    {tab==='products'&&<div className="admin-products">
+      <form className="admin-product-form" onSubmit={saveProduct}>
+        <h3>{editingId?'Edit product':'Add product from URL'}</h3>
+        <p className="admin-muted">Supplier product link paste karo. Available page metadata automatically fill hogi; final details aur price save karne se pehle check karna.</p>
+        <label className="admin-wide">Product URL<input type="url" value={form.source_url} onChange={e=>setForm(f=>({...f,source_url:e.target.value}))} placeholder="https://www.meesho.com/..."/></label>
+        <button type="button" className="button button-outline" onClick={fetchProduct} disabled={fetching||busy}>{fetching?'FETCHING DETAILS…':'FETCH PRODUCT DETAILS'}</button>
+        <div className="admin-product-grid">
+          <label>Product name<input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} required placeholder="Product name"/></label>
+          <label>Category<input value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} required placeholder="Fashion / Beauty / Skincare"/></label>
+          <label>Supplier<select value={form.source_name} onChange={e=>setForm(f=>({...f,source_name:e.target.value}))}><option>Meesho</option><option>Flipkart</option><option>Other</option></select></label>
+          <label>Supplier cost (₹)<input type="number" min="0" step="0.01" value={form.source_cost} onChange={e=>setForm(f=>({...f,source_cost:e.target.value}))} placeholder="0"/></label>
+          <label>Selling price (₹)<input type="number" min="0" step="0.01" value={form.selling_price} onChange={e=>setForm(f=>({...f,selling_price:e.target.value}))} required placeholder="699"/></label>
+          <label>MRP (₹)<input type="number" min="0" step="0.01" value={form.mrp} onChange={e=>setForm(f=>({...f,mrp:e.target.value}))} placeholder="999"/></label>
+          <label className="admin-wide">Product image URL<input type="url" value={form.image_url} onChange={e=>setForm(f=>({...f,image_url:e.target.value}))} placeholder="https://..."/></label>
+          <label className="admin-wide">Description<textarea rows="3" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Product details"/></label>
+        </div>
+        <div className="admin-product-checks"><label><input type="checkbox" checked={form.prepaid_enabled} onChange={e=>setForm(f=>({...f,prepaid_enabled:e.target.checked}))}/> Prepaid enabled</label><label><input type="checkbox" checked={form.cod_enabled} onChange={e=>setForm(f=>({...f,cod_enabled:e.target.checked}))}/> COD enabled</label><label><input type="checkbox" checked={form.is_active} onChange={e=>setForm(f=>({...f,is_active:e.target.checked}))}/> Publish on store</label></div>
+        <div className="admin-actions"><button className="button button-dark" disabled={busy||fetching}>{editingId?'UPDATE PRODUCT':'SAVE PRODUCT'}</button>{editingId&&<button type="button" className="button button-outline" onClick={()=>{setEditingId(null);setForm(emptyProduct);setMessage('Edit cancelled.')}}>CANCEL EDIT</button>}</div>
+      </form>
+      <h3>Product catalogue</h3>
+      <div className="admin-list">{products.map(p=><article className="admin-card admin-product-card" key={p.id}><div className="admin-product-preview">{p.image_urls?.[0]?<img src={p.image_urls[0]} alt="" />:<span>OG WORLD</span>}<div><b>{p.name}</b><small>{p.category} · {p.source_name||'Other'} · {p.is_active?'Published':'Hidden'}</small><strong>{money(p.selling_price)} {p.mrp>p.selling_price&&<del>{money(p.mrp)}</del>}</strong></div></div><div className="admin-actions"><button className="button button-outline" onClick={()=>editProduct(p)}>EDIT</button>{p.is_active&&<button className="button button-outline" disabled={busy} onClick={()=>deactivateProduct(p)}>HIDE FROM STORE</button>}</div></article>)}{!products.length&&!busy&&<p className="admin-muted">No products yet. Upar URL paste karke pehla product add karo.</p>}</div>
+    </div>}
     {tab==='orders'&&<div className="admin-list">{orders.map(o=><article className="admin-card" key={o.id}><div className="admin-card-top"><div><span className="eyebrow">{o.order_number}</span><h3>{money(o.total)}</h3><small>{new Date(o.created_at).toLocaleString('en-IN')}</small></div><span className="admin-status">{o.order_status} · {o.payment_status}</span></div><p className="admin-address">{typeof o.address_snapshot==='string'?o.address_snapshot:JSON.stringify(o.address_snapshot||{})}</p><div className="admin-item-list">{orderItems(o.id).map(it=><div key={it.id}>{it.product_name} × {it.quantity} <b>{money(it.unit_price*it.quantity)}</b></div>)}</div><div className="admin-card-bottom"><label>Order status<select value={o.order_status} onChange={e=>updateOrderStatus(o.id,e.target.value)} disabled={busy}><option value="pending_payment">Pending payment</option><option value="payment_review">Payment review</option><option value="confirmed">Confirmed</option><option value="purchased">Purchased</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option><option value="refund_pending">Refund pending</option><option value="refunded">Refunded</option></select></label><span>Payment: {o.payment_method}</span></div></article>)}{!orders.length&&!busy&&<p className="admin-muted">No orders found yet.</p>}</div>}
     {tab==='payments'&&<div className="admin-list">{payments.map(p=>{const order=orders.find(o=>o.id===p.order_id);return <article className="admin-card" key={p.id}><div className="admin-card-top"><div><span className="eyebrow">{order?.order_number||p.order_id}</span><h3>{money(p.claimed_amount)}</h3><small>{new Date(p.created_at).toLocaleString('en-IN')}</small></div><span className="admin-status">{p.status}</span></div><p><b>UTR:</b> {p.utr}</p><p><b>Customer:</b> {p.user_id}</p>{p.screenshot_url&&<button className="text-link" onClick={async()=>{const {data,error}=await supabase.storage.from('payment-proofs').createSignedUrl(p.screenshot_url,120);if(error)setMessage(error.message);else window.open(data.signedUrl,'_blank','noopener,noreferrer')}}>VIEW PAYMENT SCREENSHOT</button>}{p.status==='submitted'&&<div className="admin-actions"><button className="button button-dark" disabled={busy} onClick={()=>verify(p,true)}>VERIFY PAYMENT</button><button className="button button-outline" disabled={busy} onClick={()=>verify(p,false)}>REJECT</button></div>}</article>})}{!payments.length&&!busy&&<p className="admin-muted">No payment submissions yet.</p>}</div>}
   </section></div>;

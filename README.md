@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # OG WORLD — Phase 3: Live Product Catalogue
 
 This version keeps the existing React/Vite storefront and Supabase authentication, and replaces the hard-coded demo product cards with live data from `public.products`.
@@ -57,6 +56,3 @@ The SQL adds a SECURITY INVOKER order function. It recalculates product prices f
 5. After paying, enter the UTR / transaction reference number and optionally upload a screenshot (maximum 5 MB). The screenshot is stored in a private `payment-proofs` bucket.
 
 Customer payment details are submitted with status `submitted`; the order is not automatically marked paid. Verify the payment in Supabase before changing the payment/order statuses. Never mark an order paid based only on the customer's screenshot or UTR; confirm it in the UPI/bank account first. This build does not automatically collect or verify UPI payments.
-=======
-# og-world
->>>>>>> 8aa5190035114d2ff4fa8ec218a0808694f6f016
