@@ -1,0 +1,26 @@
+OG WORLD — PHASE 8 PREMIUM MARKETPLACE DESIGN
+
+This update refreshes the existing Phase 7 storefront visuals while preserving the current Supabase auth, products, cart, checkout, UPI payment submission, admin dashboard, account, order tracking and wishlist flows.
+
+DESIGN UPDATES
+- Marketplace-style navy and warm orange visual theme
+- Cleaner sticky storefront header and mobile navigation
+- New shopping-focused hero messaging
+- Shopping trust strip for delivery, secure checkout, tracking and support
+- Updated category tiles and product listing cards
+- Always-visible add-to-bag controls on mobile
+- Responsive layout for desktop, tablet and mobile
+
+INSTALL
+1. Extract this ZIP.
+2. Open the extracted folder in VS Code. package.json must be visible at the top level.
+3. Open Terminal in that folder and run:
+   npm install
+   npm run dev
+4. Open the local URL printed by Vite.
+
+DATABASE
+No new SQL is required for Phase 8. Keep using the same Supabase project and existing .env.local settings.
+
+NOTE
+The product card label says OG PICK; it is a merchandising label, not a customer rating. No fake review score or rating count has been added.

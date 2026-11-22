@@ -1,0 +1,33 @@
+OG WORLD — PHASE 7
+==================
+
+Included in this phase:
+1. Customer account panel with editable full name and phone number.
+2. Customer order history with order items, payment status, and delivery progress.
+3. Wishlist with saved items in this browser (local browser storage).
+4. Product sorting: featured, price low-to-high, price high-to-low, and name A-Z.
+5. Existing product search and category filters remain available.
+
+INSTALL / UPDATE
+----------------
+1. Extract this ZIP into a NEW folder.
+2. Open the extracted folder in VS Code. package.json must be visible at the top level.
+3. Open Terminal in that folder and run:
+
+   npm install
+   npm run dev
+
+4. Open the localhost URL shown by Vite.
+
+SUPABASE
+--------
+No new SQL is required for Phase 7. It uses the existing profiles, orders,
+and order_items tables and existing customer RLS policies/grants.
+
+IMPORTANT NOTES
+---------------
+- Wishlist data is stored in the current browser on the current device. It is
+  not yet synced across devices or browsers.
+- Customers can only read their own orders through the existing RLS rules.
+- Order tracking displays the status that the admin updates in the Admin Panel.
+- Do not disable Row Level Security or expose a service_role key in the frontend.
